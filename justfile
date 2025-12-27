@@ -7,5 +7,6 @@ docker-build:
     docker build . -t ot
 
 render: clean docker-build
+    mkdir -p data
     docker run --rm -v .:/book ot
     cp -r data _book/
