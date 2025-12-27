@@ -1,0 +1,73 @@
+# EDA
+
+Este capítulo lleva a cabo un **Exploratory Data Analysis** (análisis exploratorio de datos) para ir sacando información, conclusiones o inferencias a partir de los [datos escrapeados](scrap.qmd).
+
+## Librerías utilizadas
+
+```{r}
+#| warning: false
+library(tidyverse)
+library(kableExtra)
+library(ggridges)
+library(scales)
+```
+
+## Datos de partida
+
+### Temporadas
+
+```{r message=FALSE}
+(df_temporadas <- read_csv("data/temporadas.csv") |>
+  mutate(
+    edicion = as.factor(edicion),
+    duracion = as.difftime(duracion, units = "days"),
+    cadena = fct_inorder(cadena)
+  )
+) |> kable()
+```
+
+### Concursantes
+
+```{r message=FALSE}
+(df_concursantes <- read_csv("data/concursantes.csv") |>
+  mutate(
+    genero = factor(genero, levels = c("H", "M")),
+    edicion = as.factor(edicion),
+    comunidad = as.factor(comunidad)
+  )
+) |> slice_head(n = 10) |> kable()
+```
+
+### Galas
+
+```{r message=FALSE}
+(df_galas <- read_csv("data/galas.csv") |>
+  mutate(
+    edicion = as.factor(edicion),
+    estado = as.factor(estado) 
+  )
+) |> slice_head(n = 10) |> kable()
+```
+
+## Análisis exploratorio
+
+### Distribución de edades por edición
+
+```{r}
+#| message: false
+#| warning: false
+df_concursantes |>
+  left_join(df_temporadas) |>
+  ggplot(aes(x = edad, y = edicion, fill = cadena)) +
+    geom_density_ridges() +
+    theme_minimal() +
+    scale_x_continuous(
+      breaks = breaks_width(5),
+      minor_breaks = breaks_width(1)
+    ) +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    )
+```

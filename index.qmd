@@ -1,0 +1,5 @@
+# Introducción
+
+He sido un super fan de **Operación Triunfo** desde la primera edición allá por 2001, tanto que por poco me cuesta suspender Ingeniería Informática 😅
+
+Siempre quise "aportar mi granito de arena" y me he decidido por hacer un humilde **análisis de datos** (*trabajo en progreso*).

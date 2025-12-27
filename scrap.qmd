@@ -1,0 +1,975 @@
+# Scraping
+
+Este capítulo describe el proceso de "scraping" o extracción de datos de **Operación Triunfo** desde Wikipedia, concretamente a partir de [esta URL base]( https://es.wikipedia.org/wiki/Operaci%C3%B3n_Triunfo_(Espa%C3%B1a)).
+
+Los datos finalmente se encontrarán en estas ubicaciones:
+
+- [`temporadas.csv`](./data/temporadas.csv)
+- [`concursantes.csv`](./data/concursantes.csv)
+- [`galas.csv`](./data/galas.csv)
+
+## Librerías necesarias
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(rvest)
+library(janitor)
+library(sf)
+library(mapSpain)
+library(fuzzyjoin)
+```
+
+## Funciones auxiliares
+
+```{r}
+#| message: false
+#| warning: false
+esp_get_munic() |>
+  select(
+    municipio = name,
+    caut = ine.ccaa.name
+  ) |>
+  st_drop_geometry() |>
+  mutate(
+    caut = case_when(
+      caut == "Balears, Illes" ~ "Islas Baleares",
+      caut == "Comunitat Valenciana" ~ "Comunidad Valenciana",
+      caut == "Madrid, Comunidad de" ~ "Madrid",
+      caut == "Murcia, Región de" ~ "Murcia",
+      caut == "Rioja, La" ~ "La Rioja",
+      caut == "Asturias, Principado de" ~ "Asturias",
+      caut == "Navarra, Comunidad Foral de" ~ "Navarra",
+      TRUE ~ caut
+    )
+  ) |>
+  as_tibble() -> muni_ccaa
+
+fill_caut <- function (df) {
+  df |>
+    stringdist_left_join(
+      muni_ccaa,
+      by = c("residencia" = "municipio"),
+      distance_col = "dist"
+    ) |>
+    group_by(concursante) |>
+    slice_min(dist, with_ties = FALSE) |>
+    ungroup() |>
+    select(
+      -c(dist, municipio),
+      comunidad = caut,
+    )
+}
+
+fix_galas <- function (df, df_concursantes) {
+  df |>
+    mutate(
+      across(
+        starts_with("gala_"),
+        ~ case_when(
+          str_detect(.x, "Favorit[oa]") ~ "FAV",
+          str_detect(.x, "Nominad[oa]") ~ "NOM",
+          str_detect(.x, "Salvad[oa]") ~ "SLV",
+          str_detect(.x, "Expulsad[oa]") ~ "EXP"
+        )
+      ),
+      id = row_number(),
+    ) |>
+    left_join(
+      df_concursantes |> transmute(id = row_number(), concursante),
+      by = "id"
+    ) |>
+    mutate(concursante = concursante.y, .before = gala_1) |>
+    select(-c(concursante.x, concursante.y, id)) |>
+    pivot_longer(
+      cols = starts_with("gala_"),
+      names_to = "gala",
+      names_pattern = "gala_(\\d+)",
+      values_to = "estado",
+      values_drop_na = TRUE
+    ) |>
+    mutate(
+      gala = as.numeric(gala),
+      estado = as.factor(estado)
+    )
+}
+
+# Variables/Constantes generales
+WIKIPEDIA_BASE_URL <- "https://es.wikipedia.org/wiki/Operaci%C3%B3n_Triunfo_"
+LOCALE <- "es_ES.UTF-8"
+concursantes <- list()
+galas <- list()
+```
+
+## Temporadas
+
+```{r}
+#| message: false
+#| warning: false
+read_html(paste0(WIKIPEDIA_BASE_URL, "España")) |>
+  html_element(xpath = "//h2[.='Resumen por temporadas']/following::table[1]") |>
+  html_table() |>
+  select(-1, -last_col()) |>
+  slice(-1, -n()) |>
+  transmute(
+    temporada = Temporada,
+    cadena = as.factor(Cadena),
+    estreno = dmy(Estreno, locale = LOCALE),
+    final = dmy(Final, locale = LOCALE),
+    edicion = paste0('OT', year(estreno)),
+    duracion = final - estreno
+  ) |>
+  relocate(edicion, .after = temporada) |>
+  relocate(cadena, .after = last_col()) |>
+  write_csv("data/temporadas.csv")
+```
+
+## OT2001
+
+```{r}
+year <- 2001
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Participantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    concursante = participante_95,
+    edad,
+    residencia
+  ) |>
+  mutate(
+    posicion = row_number(),
+    .after = concursante,
+    genero = as.factor(case_when(
+      concursante %in% c(
+        "Rosa López", "Chenoa", "Verónica Romero", "Nuria Fergó",
+        "Gisela", "Natalia", "Mireia Montávez"
+      ) ~ "M",
+      TRUE ~ "H"
+    ))
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Geno Machado" ~ "Canarias",
+      concursante == "Gisela" ~ "Cataluña",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    concursante = x,
+    gala_1:gala_13,
+    -c(gala_0, gala_8_2, navidad),
+    gala_14 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2002
+
+```{r}
+year <- 2002
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-1) |>
+  filter(x5 != "No entra en la academia") |>
+  slice(-n()) |>
+  transmute(
+    concursante = if_else(
+      str_starts(x2, "Cierra"),  # Error en wikipedia!
+      "Cristie",
+      x2
+    ),
+    posicion = as.numeric(x1),
+    genero = as.factor(case_when(
+      concursante %in% c(
+        "Ainhoa Cantalapiedra",
+        "Beth Rodergas",
+        "Nika",
+        "Vega",
+        "Elena Gadel",
+        "Tessa Bodí",
+        "Inma «Marey» Marente",
+        "Cristie",
+        "Mai Meneses"
+      ) ~ "M",
+      TRUE ~ "H"
+    )),
+    edad = as.numeric(x3),
+    residencia = x4,
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Ainhoa Cantalapiedra" ~ "País Vasco",
+      concursante == "Enrique Anaut" ~ "Navarra",
+      concursante == "Tony Santos" ~ "Canarias",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+  
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    gala_1:gala_13,
+    gala_14 = gala_final,
+    concursante = concursantes
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2003
+
+```{r}
+year <- 2003
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-1) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(case_when(
+      concursante %in% c(
+        "Davinia Cuevas",
+        "Leticia Pérez (†)",
+        "Noelia Fonte",
+        "Beatriz Porrúa",
+        "Nuria Elosegui",
+        "Sonia Poblet",
+        "Miriam Villar",
+        "Isabel Fernández"
+      ) ~ "M",
+      TRUE ~ "H"
+    )),
+    edad = as.numeric(x3),
+    residencia = x4,
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Davinia Cuevas" ~ "Andalucía",
+      concursante == "Federico Monreal Villasante (Sonny Monreal (Fede))" ~ "Madrid",
+      concursante == "Isabel Fernández" ~ "Andalucía",
+      concursante == "José Giménez" ~ "Comunidad Valenciana",
+      concursante == "Ramón del Castillo" ~ "Canarias",
+      concursante == "Vicente Seguí" ~ "Comunidad Valenciana",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    gala_1:gala_11,
+    gala_12 = gala_final,
+    concursante = x
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2005
+
+```{r}
+year <- 2005
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:n())) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(case_when(
+      concursante %in% c(
+        "Soraya Arnelas",
+        "Idaira Fernández",
+        "Edurne",
+        "Lidia Reyes",
+        "Sandra Polop",
+        "Mónica Gallardo",
+        "Trizia Alonso",
+        "Janina Foranda"
+      ) ~ "M",
+      TRUE ~ "H"
+    )),
+    edad = as.numeric(x3),
+    residencia = x4,
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Héctor Rojo" ~ "Comunidad Valenciana",
+      concursante == "Idaira Fernández" ~ "Canarias",
+      concursante == "Janina Foranda" ~ "Canarias",
+      concursante == "Sergio Rivero" ~ "Canarias",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-n()) |>
+  select(
+    gala_1:gala_14,
+    gala_15 = gala_final,
+    concursante = concursantes
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+  
+## OT2006
+
+```{r}
+year <- 2006
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:n())) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(case_when(
+      concursante %in% c(
+        "Lorena Gómez",
+        "Saray Ramírez",
+        "Eva Carreras",
+        "Vanessa González",
+        "Mayte Macanás",
+        "Mercedes Durán",
+        "Cristina Esteban"
+      ) ~ "M",
+      TRUE ~ "H"
+    )),
+    edad = as.numeric(x3),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(comunidad = as.factor(comunidad)) |>
+  arrange(posicion)
+```
+
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(n()-1, n())) |>
+  select(
+    concursante = x,
+    gala_1:gala_15,
+    gala_16 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2008
+
+```{r}
+year <- 2008
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:n())) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Virginia Maestro",
+          "Sandra Criado",
+          "Mimi Segura",
+          "Noelia Cano",
+          "Anabel Dueñas",
+          "Tania Sánchez",
+          "Esther Aranda",
+          "Tania Gómez",
+          "Paula Ortiz"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(x3),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(comunidad = as.factor(comunidad)) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(17:n())) |>
+  select(
+    concursante = x,
+    gala_1:gala_14,
+    gala_15 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2009
+
+```{r}
+year <- 2009
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-1) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Alba Lucía López",
+          "Brenda Mau",
+          "Cristina Rueda",
+          "Diana Tobar",
+          "Guadiana Almena",
+          "Nazaret Tebar",
+          "Patricia Navarro",
+          "Patty del Olmo",
+          "Sylvia Parejo"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(x3),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Samuel Cuenda" ~ "Andalucía",
+      concursante == "Rafa Bueso" ~ "Comunidad Valenciana",
+      concursante == "Víctor Púa" ~ "Cataluña",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    concursante = x,
+    gala_1:gala_12,
+    -gala_9_2,
+    gala_13 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2011
+
+```{r}
+year <- 2011
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 19:21)) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Alexandra Masangkay",
+          "Niccó (Raquel San Nicolás)",
+          "Roxio (Rocío Torralba)",
+          "Coraluna (Ana Isabel Mercado)",
+          "Nirah (Núria Robles)",
+          "Moneiba Hidalgo",
+          "Silvia Román",
+          "Meriem Arbip"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(x3),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Geno Machado" ~ "Canarias",
+      concursante == "Nahuel Sachak" ~ "Comunidad Valenciana",
+      concursante == "Nirah (Núria Robles)" ~ "Cataluña",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    concursante = x,
+    gala_1:gala_4,
+    gala_5 = gala_final,
+    -matches("^gala_\\d+_\\d+")
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2017
+
+```{r}
+year <- 2017
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:20)) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Amaia Romero",
+          "Aitana Ocaña",
+          "Miriam Rodríguez",
+          "Ana Guerra",
+          "Nerea Rodríguez",
+          "Mireya Bravo",
+          "Marina Rodríguez",
+          "Thalía Garrido",
+          "Mimi Doblas"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(str_extract(x3, "^(\\d+)", group = 1)),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Aitana Ocaña" ~ "Cataluña",
+      concursante == "Alfred García" ~ "Cataluña",
+      concursante == "Amaia Romero" ~ "Navarra",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+#| warning: false
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  slice(-c(17, 18)) |>
+  select(
+    concursante = x,
+    gala_1:gala_12,
+    gala_13 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2018
+
+```{r}
+year <- 2018
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:20)) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Alba Reche",
+          "Natalia Lacunza",
+          "Sabela Ramil",
+          "Julia Medina",
+          "Marta Sango",
+          "María Escarmiento",
+          "Marilia Monzón",
+          "Noelia Franco",
+          "África Adalia"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(str_extract(x3, "^(\\d+)", group = 1)),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Marta Sango" ~ "Andalucía",
+      concursante == "Natalia Lacunza" ~ "Navarra",
+      concursante == "Sabela Ramil" ~ "Galicia",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+#| warning: false
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  slice(-c(17, 18)) |>
+  select(
+    concursante = x,
+    gala_1:gala_12,
+    gala_13 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2020
+
+```{r}
+year <- 2020
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(1, 18:20)) |>
+  transmute(
+    concursante = x2,
+    posicion = as.numeric(x1),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Nía Correia",
+          "Eva Barreiro",
+          "Anaju Calavia",
+          "Maialen Gurbindo",
+          "Samantha Gilabert",
+          "Anne Lukin",
+          "Eli Sánchez",
+          "Ariadna Tortosa"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.numeric(str_extract(x3, "^(\\d+)", group = 1)),
+    residencia = x4
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Anne Lukin" ~ "Navarra",
+      concursante == "Eli Sánchez" ~ "Canarias",
+      concursante == "Maialen Gurbindo" ~ "Navarra",
+      concursante == "Nía Correia" ~ "Canarias",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+#| warning: false
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  slice(-c(17, 18)) |>
+  select(
+    concursante = x,
+    gala_1:gala_12,
+    gala_13 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2023
+
+```{r}
+year <- 2023
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(17:19)) |>
+  transmute(
+    concursante,
+    posicion = as.integer(n_o),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Naiara Moreno",
+          "Ruslana Panchyshyna",
+          "Bea Fernández",
+          "Chiara Oliver",
+          "Cris Helia",
+          "Violeta Hódar",
+          "Salma Díaz",
+          "Denna Ruiz",
+          "Suzete Correia"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.integer(edad),
+    residencia 
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Chiara Oliver" ~ "Islas Baleares",
+      concursante == "Martin Urrutia" ~ "País Vasco",
+      TRUE ~ comunidad
+    )
+  )) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Estadísticas semanales']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  select(
+    concursante = x,
+    c(gala_1:gala_11),
+    gala_12 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## OT2025
+
+```{r}
+year <- 2025
+edicion <- paste0("OT", year)
+url <- paste0(WIKIPEDIA_BASE_URL, year)
+```
+
+### Concursantes
+
+```{r}
+concursantes[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Concursantes']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(17:19)) |>
+  transmute(
+    concursante,
+    posicion = as.integer(n_o),
+    genero = as.factor(
+      case_when(
+        concursante %in% c(
+          "Cristina Lora",
+          "Olivia Bay",
+          "Claudia Arenas",
+          "Elena Matatéyou \"Téyou\"",
+          "Lucía Casani",
+          "María Cruz",
+          "Laura Muñoz",
+          "Judit Garuz",
+          "Salma de Diego"
+        ) ~ "M",
+        TRUE ~ "H"
+      )
+    ),
+    edad = as.integer(edad),
+    residencia 
+  ) |>
+  fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Claudia Arenas" ~ "Comunidad Valenciana",
+      concursante == "Laura Muñoz" ~ "Navarra",
+      concursante == "María Cruz" ~ "Canarias",
+      concursante == "Tinho Vaamonde" ~ "Galicia",
+      TRUE ~ comunidad
+    ))
+  ) |>
+  arrange(posicion)
+```
+
+### Galas
+
+```{r}
+galas[[edicion]] <- read_html(url) |>
+  html_element(xpath = "//h2[.='Tabla de estadísticas semanal']/following::table[1]") |>
+  html_table() |>
+  clean_names() |>
+  slice(-c(17, 18)) |>
+  select(
+    concursante = x,
+    c(gala_1:gala_12),
+    gala_13 = gala_final
+  ) |>
+  fix_galas(df_concursantes = concursantes[[edicion]])
+```
+
+## Unión de dataframes
+
+```{r}
+concursantes |>
+  bind_rows(.id = "edicion") |>
+  write_csv("data/concursantes.csv")
+
+galas |>
+  bind_rows(.id = "edicion") |>
+  write_csv("data/galas.csv")
+```

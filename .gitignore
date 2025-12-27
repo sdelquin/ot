@@ -1,0 +1,8 @@
+/.quarto/
+_book/
+_site/
+scrap_cache/
+.RData
+.Rhistory
+data/
+.DS_Store

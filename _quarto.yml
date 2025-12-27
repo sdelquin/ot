@@ -1,0 +1,16 @@
+project:
+  type: book
+
+book:
+  title: "Operación Triunfo"
+  author: "Sergio Delgado Quintero"
+  chapters:
+    - index.qmd
+    - scrap.qmd
+    - eda.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    number-sections: true
