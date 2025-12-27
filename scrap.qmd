@@ -100,6 +100,7 @@ WIKIPEDIA_BASE_URL <- "https://es.wikipedia.org/wiki/Operaci%C3%B3n_Triunfo_"
 LOCALE <- "es_ES.UTF-8"
 concursantes <- list()
 galas <- list()
+dir.create("data", showWarnings = FALSE)
 ```
 
 ## Temporadas

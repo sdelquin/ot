@@ -10,8 +10,8 @@ RUN apt-get update && \
 RUN sed -i '/es_ES.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen es_ES.UTF-8
 
-ADD . /book
-WORKDIR /book
+ADD . /project
+WORKDIR /project
 
 RUN R -e "install.packages(c( \
       'kableExtra', \
@@ -21,4 +21,4 @@ RUN R -e "install.packages(c( \
       'fuzzyjoin' \
     ))"
 
-CMD ["quarto", "render"]
+CMD ["./render.sh"]
