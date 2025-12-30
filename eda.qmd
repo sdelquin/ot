@@ -1,3 +1,9 @@
+---
+format:
+  html:
+    code-fold: true
+---
+
 # EDA
 
 Este capítulo lleva a cabo un **Exploratory Data Analysis** (análisis exploratorio de datos) para ir sacando información, conclusiones o inferencias a partir de los [datos escrapeados](scrap.qmd).
@@ -6,6 +12,7 @@ Este capítulo lleva a cabo un **Exploratory Data Analysis** (análisis explorat
 
 ```{r}
 #| warning: false
+#| code-fold: false
 library(tidyverse)
 library(kableExtra)
 library(ggridges)
@@ -51,7 +58,11 @@ library(scales)
 
 ## Análisis exploratorio
 
-### Distribución de edades por edición
+### Distribución de edad por edición
+
+En el siguiente gráfico se muestra la distribución de edad de los concursantes en cada edición del programa.
+
+Desde luego la gran mayoría se encuentran en el rango de 20 a 25 años. Resulta curiosa la distribución de OT2011 con dos núcleos diferenciados de edad. Igualmente OT2008 y OT2017 muestran ciertos "flecos" de edades algo mayores.
 
 ```{r}
 #| message: false
@@ -60,14 +71,335 @@ df_concursantes |>
   left_join(df_temporadas) |>
   ggplot(aes(x = edad, y = edicion, fill = cadena)) +
     geom_density_ridges() +
+    coord_cartesian(clip = "off") +
     theme_minimal() +
     scale_x_continuous(
       breaks = breaks_width(5),
-      minor_breaks = breaks_width(1)
+      minor_breaks = breaks_width(1),
+      labels = \(x) paste(x, "años")
     ) +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+
+### Duración del programa por edición
+
+En el siguiente gráfico se muestra la duración de cada edición en días, teniendo en cuenta la fecha de comienzo y de finalización.
+
+Obviamente OT2020 se tuvo que alargar hasta los 150 días (unos 5 meses) debido a la pandemia. Por el lado contrario resulta llamativo que OT2011 haya durado tan poco (en torno a 1 mes), quizás por cuestiones de audiencia.
+
+```{r}
+#| message: false
+#| warning: false
+df_temporadas |>
+  ggplot(aes(x = duracion, y = edicion, color = cadena)) +
+    geom_segment(aes(x = 0, xend = duracion, yend = edicion), size = 1) +
+    geom_point(size = 3) +
+    scale_x_continuous(
+      labels = \(x) paste(x, "días")
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+### Distribución de género por edición 
+
+En el siguiente gráfico se muestra una especie de "pirámide poblacional" con la proporción (en porcentaje) de hombres y mujeres en cada edición del programa.
+
+Por lo general todas las ediciones han sido bastante equilibradas en cuanto a la distribución de género exceptuando OT2001 donde el número de hombres era muy superior al de mujeres.
+
+```{r}
+#| message: false
+#| warning: false
+df_concursantes |>
+  left_join(df_temporadas) |>
+  count(edicion, genero) |>
+  group_by(edicion) |>
+  mutate(
+    porcentaje = n / sum(n) * 100,
+    valor = if_else(genero == "H", -porcentaje, porcentaje)
+  ) |>
+  mutate(
+    genero = case_match(
+      genero,
+      "H" ~ "Hombre",
+      "M" ~ "Mujer"
+    ) 
+  ) |>
+  ggplot(aes (x = valor, y = edicion, fill = genero)) +
+    geom_col(width = 0.8) +
+    geom_vline(xintercept = 0, color = "grey40") +
+    scale_x_continuous(
+      labels = function(x) paste0(abs(x), "%"),
+      breaks = breaks_width(20),
+    ) +
+    theme_minimal() +
     labs(
       x = NULL,
       y = NULL,
       fill = NULL,
     )
 ```
+### Tiempo hasta la siguiente edición
+
+En el siguiente gráfico se muestra el tiempo transcurrido (en años) entre el final de una edición del programa y el comienzo de otra.
+
+Por encima de todo destacan los casi 7 años de espera tras OT2011 en el que el programa volvió a "La 1".
+
+```{r}
+#| warning: false
+df_temporadas |>
+  mutate(
+    hasta_siguiente = (estreno - lag(final)) / 365.25,
+    etiqueta_intervalo = paste(lag(edicion), "hasta", edicion)
+  ) |>
+  drop_na("hasta_siguiente") |>
+  ggplot(aes(x = hasta_siguiente, y = etiqueta_intervalo, color = cadena)) +
+    geom_segment(aes(x = 0, xend = hasta_siguiente, yend = etiqueta_intervalo), size = 1) +
+    geom_point(size = 3) +
+    scale_x_continuous(
+      labels = \(x) paste(x, "años"),
+      breaks = breaks_width(1)
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+
+### Audiencias por edición
+
+En el siguiente gráfico se muestra la audiencia (número de espectadores en millones) de cada edición del programa.
+
+Los 7 millones de espectadores de OT2001 es un hito en la historia de la televisión. Resulta llamativo que las audiencias van descendiendo hasta que llega un cambio de canal, donde vuelven a repuntar pero siguen con la tendencia a la baja. No hay datos de OT2025.
+
+```{r}
+#| warning: false
+df_temporadas |>
+  ggplot(aes(y = edicion, x = audiencia, color = cadena)) +
+    geom_segment(aes(x = 0, xend = audiencia, yend = edicion), size = 1) +
+    geom_point(size = 3) +
+    scale_x_continuous(
+      labels = label_number(scale = 1e-6, suffix = "M"),
+      breaks = breaks_width(1e6)
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+### Edad media de cada edición
+
+En el siguiente gráfico se muestra la edad media de los concursantes de cada edición del programa.
+
+Todas las ediciones de "La 1" y "Prime Video" tienen una edad media muy similar (entre 21 y 22 años) sin embargo las ediciones emitidas en Telecinco tienen edades medias más dispares.
+
+El gráfico se ha recortado a partir de 18 años donde se encuentra la zona de interés.
+
+```{r}
+#| message: false
+#| warning: false
+df_concursantes |>
+  left_join(df_temporadas) |>
+  group_by(edicion) |>
+  summarise(
+    edicion = first(edicion),
+    cadena = first(cadena),
+    edad = mean(edad)
+  ) |>
+  ggplot(aes(x = edad, y = edicion, color = cadena)) +
+    geom_segment(aes(x = 0, xend = edad, yend = edicion), size = 1) +
+    geom_point(size = 3) +
+    scale_x_continuous(
+      labels = \(x) paste(x, "años"),
+      breaks = breaks_width(1)
+    ) +
+    coord_cartesian(xlim = c(18, NA)) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+### Distribución de concursantes por CCAA
+
+En el siguiente gráfico se muestra la proporción (en porcentaje) de todos los concursantes en la historia de OT agrupados por su Comunidad Autónoma.
+
+Andalucía es, de largo, la Comunidad Autónoma que más concursantes ha aportado al programa. Como detalle, no ha habido ningún concursante de La Rioja en la historia de OT.
+
+```{r}
+ccaa <- c(
+  "Andalucía",
+  "Aragón",
+  "Asturias",
+  "Canarias",
+  "Cantabria",
+  "Castilla - La Mancha",
+  "Castilla y León",
+  "Cataluña",
+  "Ceuta",
+  "Comunidad Valenciana",
+  "Extremadura",
+  "Galicia",
+  "Islas Baleares",
+  "La Rioja",
+  "Madrid",
+  "Melilla",
+  "Murcia",
+  "Navarra",
+  "País Vasco"
+)
+
+df_concursantes |>
+  count(comunidad) |>
+  complete(comunidad = ccaa, fill = list(n = 0)) |>
+  mutate(
+    porcentaje = n / sum(n) * 100
+  ) |>
+  ggplot(aes(x = porcentaje, y = fct_reorder(comunidad, porcentaje))) +
+    geom_segment(aes(x = 0, xend = porcentaje, yend = comunidad), size = 1, color = "#619CFF") +
+    geom_point(size = 3, color = "#619CFF") +
+    scale_x_continuous(
+      labels = \(x) paste0(x, "%"),
+      breaks = breaks_width(5)
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+### Número (distinto) de CCAA en cada edición
+
+En el siguiente gráfico se muestra el número de Comunidades Autónomas de los concursantes en las distintas ediciones del programa.
+
+Cabe destacar la "poca" variedad de OT2008 con sólo 5 Comunidades Autónomas representando concursantes. Por lo general todas las ediciones son bastante diversas en este sentido.
+
+```{r}
+#| message: false
+df_concursantes |>
+  left_join(df_temporadas) |>
+  group_by(edicion) |>
+  summarise(
+    n_comunidades = n_distinct(comunidad),
+    cadena = first(cadena)
+  ) |>
+  ggplot(aes(x = n_comunidades, y = edicion, color = cadena)) +
+    geom_segment(aes(x = 0, xend = n_comunidades, yend = edicion), size = 1) +
+    geom_point(size = 3) +
+    scale_x_continuous(
+      breaks = breaks_width(1)
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL,
+    ) +
+    theme(
+      panel.grid.major.y = element_blank()
+    )
+```
+
+### Distribución de edad por género
+
+En el siguiente gráfico se muestra la distribución de edad de los concursantes del programa en función de su género.
+
+En su mediana, podríamos decir que los hombres concursantes son 1 año mayores que las mujeres concursantes. Ellos están en una mediana de 22 años y ellas en 21 años. Igualmente viendo la curva se observa que la distribución de edad de los hombres es más "normal" (en el concepto estadístico) mientras que la de las mujeres tiene una cierta asimetría negativa (mayor cantidad de edades jóvenes).
+
+```{r}
+#| message: false
+#| warning: false
+library(ggdist)
+df_concursantes |>
+  ggplot(aes(x = genero, y = edad)) +
+    stat_halfeye(
+      aes(fill = genero),
+      adjust = .7,
+      width = .5,
+    ) +
+    geom_dots(
+      aes(fill = genero),
+      color = NA,
+      layout = "weave",
+      side = "bottom",
+      dotsize = 0.35,
+      alpha = .3,
+    ) +
+    scale_x_discrete(
+      labels = c(H = "Hombre", M = "Mujer"),
+    ) +
+    scale_y_continuous(
+      minor_breaks = breaks_width(1),
+      labels = \(x) paste(x, "años")
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid.major.x = element_blank(),
+      legend.position = "none"
+    )
+```
+### Primeros puestos por edición y CCAA
+
+En el siguiente gráfico se muestran los 5 primeros concursantes clasificados en cada edición del programa identificando su Comunidad Autónoma.
+
+```{r}
+library(colorspace)
+df_concursantes |>
+  filter(posicion <= 5) |>
+  ggplot(aes(x = posicion, y = edicion, label = concursante, fill = comunidad)) +
+    geom_label(size=2.5) +
+    scale_x_continuous(
+      labels = \(x) paste0(x, "º")
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid.minor.x = element_blank(),
+      panel.grid.major.x = element_blank(),
+      plot.margin = margin(r = 28),
+      legend.position = "bottom",
+      axis.text.y = element_text(margin = margin(r = 28))
+    )
+```
+

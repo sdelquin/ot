@@ -1,6 +1,8 @@
 project:
   type: book
 
+lang: es
+
 book:
   title: "Operación Triunfo"
   author: "Sergio Delgado Quintero"

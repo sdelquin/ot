@@ -111,22 +111,24 @@ dir.create("data", showWarnings = FALSE)
 read_html(paste0(WIKIPEDIA_BASE_URL, "España")) |>
   html_element(xpath = "//h2[.='Resumen por temporadas']/following::table[1]") |>
   html_table() |>
-  select(-1, -last_col()) |>
+  clean_names() |>
+  select(-1) |>
   slice(-1, -n()) |>
   transmute(
-    temporada = Temporada,
-    cadena = as.factor(Cadena),
-    estreno = dmy(Estreno, locale = LOCALE),
-    final = dmy(Final, locale = LOCALE),
+    temporada = temporada_2,
+    estreno = dmy(estreno, locale = LOCALE),
+    final = dmy(final, locale = LOCALE),
+    duracion = final - estreno,
     edicion = paste0('OT', year(estreno)),
-    duracion = final - estreno
+    cadena = as.factor(cadena),
+    audiencia = parse_number(audiencia, locale = locale(grouping_mark = " ")),
+    cuota_pantalla = parse_number(audiencia_2, locale = locale(decimal_mark = ","))
   ) |>
   relocate(edicion, .after = temporada) |>
-  relocate(cadena, .after = last_col()) |>
   write_csv("data/temporadas.csv")
 ```
 
-## OT2001
+### OT2001
 
 ```{r}
 year <- 2001
@@ -134,7 +136,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -161,14 +163,14 @@ concursantes[[edicion]] <- read_html(url) |>
   mutate(
     comunidad = as.factor(case_when(
       concursante == "Geno Machado" ~ "Canarias",
-      concursante == "Gisela" ~ "Cataluña",
+      concursante == "Gisela Lladó" ~ "Cataluña",
       TRUE ~ comunidad
     ))
   ) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -184,7 +186,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2002
+### OT2002
 
 ```{r}
 year <- 2002
@@ -192,7 +194,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -232,13 +234,14 @@ concursantes[[edicion]] <- read_html(url) |>
       concursante == "Ainhoa Cantalapiedra" ~ "País Vasco",
       concursante == "Enrique Anaut" ~ "Navarra",
       concursante == "Tony Santos" ~ "Canarias",
+      concursante == "Miguel Ángel Silva" ~ "Islas Baleares",
       TRUE ~ comunidad
     ))
   ) |>
   arrange(posicion)
 ```
   
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -253,7 +256,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2003
+### OT2003
 
 ```{r}
 year <- 2003
@@ -261,7 +264,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -303,7 +306,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -318,7 +321,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2005
+### OT2005
 
 ```{r}
 year <- 2005
@@ -326,7 +329,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -366,7 +369,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -382,7 +385,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
   
-## OT2006
+### OT2006
 
 ```{r}
 year <- 2006
@@ -390,7 +393,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -417,12 +420,18 @@ concursantes[[edicion]] <- read_html(url) |>
     residencia = x4
   ) |>
   fill_caut() |>
+  mutate(
+    comunidad = as.factor(case_when(
+      concursante == "Lorena Gómez" ~ "Cataluña",
+      TRUE ~ comunidad
+    ))
+  ) |>
   mutate(comunidad = as.factor(comunidad)) |>
   arrange(posicion)
 ```
 
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -438,7 +447,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2008
+### OT2008
 
 ```{r}
 year <- 2008
@@ -446,7 +455,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -481,7 +490,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -497,7 +506,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2009
+### OT2009
 
 ```{r}
 year <- 2009
@@ -505,7 +514,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -547,7 +556,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -563,7 +572,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2011
+### OT2011
 
 ```{r}
 year <- 2011
@@ -571,7 +580,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -612,7 +621,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -628,7 +637,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2017
+### OT2017
 
 ```{r}
 year <- 2017
@@ -636,7 +645,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -678,7 +687,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 #| warning: false
@@ -696,7 +705,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2018
+### OT2018
 
 ```{r}
 year <- 2018
@@ -704,7 +713,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -746,7 +755,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 #| warning: false
@@ -764,7 +773,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2020
+### OT2020
 
 ```{r}
 year <- 2020
@@ -772,7 +781,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -814,7 +823,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 #| warning: false
@@ -832,7 +841,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2023
+### OT2023
 
 ```{r}
 year <- 2023
@@ -840,7 +849,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -881,7 +890,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
@@ -896,7 +905,7 @@ galas[[edicion]] <- read_html(url) |>
   fix_galas(df_concursantes = concursantes[[edicion]])
 ```
 
-## OT2025
+### OT2025
 
 ```{r}
 year <- 2025
@@ -904,7 +913,7 @@ edicion <- paste0("OT", year)
 url <- paste0(WIKIPEDIA_BASE_URL, year)
 ```
 
-### Concursantes
+#### Concursantes
 
 ```{r}
 concursantes[[edicion]] <- read_html(url) |>
@@ -947,7 +956,7 @@ concursantes[[edicion]] <- read_html(url) |>
   arrange(posicion)
 ```
 
-### Galas
+#### Galas
 
 ```{r}
 galas[[edicion]] <- read_html(url) |>
