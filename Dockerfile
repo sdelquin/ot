@@ -18,8 +18,8 @@ RUN R -e "install.packages(c( \
       'ggridges', \
       'janitor', \
       'mapSpain', \
-      'fuzzyjoin' \
-      'ggdist', \
+      'fuzzyjoin', \
+      'ggdist' \
     ))"
 
 CMD ["./render.sh"]
