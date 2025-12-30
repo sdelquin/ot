@@ -17,6 +17,7 @@ library(tidyverse)
 library(kableExtra)
 library(ggridges)
 library(scales)
+library(ggdist)
 ```
 
 ## Datos de partida
@@ -340,7 +341,6 @@ En su mediana, podríamos decir que los hombres concursantes son 1 año mayores 
 ```{r}
 #| message: false
 #| warning: false
-library(ggdist)
 df_concursantes |>
   ggplot(aes(x = genero, y = edad)) +
     stat_halfeye(
@@ -379,7 +379,6 @@ df_concursantes |>
 En el siguiente gráfico se muestran los 5 primeros concursantes clasificados en cada edición del programa identificando su Comunidad Autónoma.
 
 ```{r}
-library(colorspace)
 df_concursantes |>
   filter(posicion <= 5) |>
   ggplot(aes(x = posicion, y = edicion, label = concursante, fill = comunidad)) +
