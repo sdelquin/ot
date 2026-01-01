@@ -19,7 +19,9 @@ RUN R -e "install.packages(c( \
       'janitor', \
       'mapSpain', \
       'fuzzyjoin', \
-      'ggdist' \
+      'ggdist', \
+      'ggrepel', \
+      'scales' \
     ))"
 
 CMD ["./render.sh"]

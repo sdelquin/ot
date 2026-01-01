@@ -26,23 +26,20 @@ library(fuzzyjoin)
 ```{r}
 #| message: false
 #| warning: false
+
 esp_get_munic() |>
   select(
-    municipio = name,
-    caut = ine.ccaa.name
+    codauto,
+    name,
   ) |>
   st_drop_geometry() |>
-  mutate(
-    caut = case_when(
-      caut == "Balears, Illes" ~ "Islas Baleares",
-      caut == "Comunitat Valenciana" ~ "Comunidad Valenciana",
-      caut == "Madrid, Comunidad de" ~ "Madrid",
-      caut == "Murcia, Región de" ~ "Murcia",
-      caut == "Rioja, La" ~ "La Rioja",
-      caut == "Asturias, Principado de" ~ "Asturias",
-      caut == "Navarra, Comunidad Foral de" ~ "Navarra",
-      TRUE ~ caut
-    )
+  left_join(
+    esp_get_ccaa() |> select(codauto, ccaa.shortname.es),
+    by = "codauto"
+  ) |>
+  select(
+    municipio = name,
+    caut = ccaa.shortname.es
   ) |>
   as_tibble() -> muni_ccaa
 
@@ -234,7 +231,7 @@ concursantes[[edicion]] <- read_html(url) |>
       concursante == "Ainhoa Cantalapiedra" ~ "País Vasco",
       concursante == "Enrique Anaut" ~ "Navarra",
       concursante == "Tony Santos" ~ "Canarias",
-      concursante == "Miguel Ángel Silva" ~ "Islas Baleares",
+      concursante == "Miguel Ángel Silva" ~ "Baleares",
       TRUE ~ comunidad
     ))
   ) |>
@@ -882,7 +879,7 @@ concursantes[[edicion]] <- read_html(url) |>
   fill_caut() |>
   mutate(
     comunidad = as.factor(case_when(
-      concursante == "Chiara Oliver" ~ "Islas Baleares",
+      concursante == "Chiara Oliver" ~ "Baleares",
       concursante == "Martin Urrutia" ~ "País Vasco",
       TRUE ~ comunidad
     )

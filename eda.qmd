@@ -18,6 +18,9 @@ library(kableExtra)
 library(ggridges)
 library(scales)
 library(ggdist)
+library(mapSpain)
+library(sf)
+library(ggrepel)
 ```
 
 ## Datos de partida
@@ -99,12 +102,12 @@ Obviamente OT2020 se tuvo que alargar hasta los 150 días (unos 5 meses) debido 
 #| message: false
 #| warning: false
 df_temporadas |>
-  ggplot(aes(x = duracion, y = edicion, color = cadena)) +
-    geom_segment(aes(x = 0, xend = duracion, yend = edicion), size = 1) +
+  ggplot(aes(x = edicion, y = duracion, color = cadena)) +
+    geom_line(group = 1, size = 1) +
     geom_point(size = 3) +
-    scale_x_continuous(
-      labels = \(x) paste(x, "días")
-    ) +
+    scale_y_continuous(
+          labels = \(y) paste(y, "días")
+        ) +
     theme_minimal() +
     labs(
       x = NULL,
@@ -112,7 +115,7 @@ df_temporadas |>
       color = NULL,
     ) +
     theme(
-      panel.grid.major.y = element_blank()
+      axis.text.x = element_text(angle = -45, hjust = 0)
     )
 ```
 ### Distribución de género por edición 
@@ -167,12 +170,13 @@ df_temporadas |>
     etiqueta_intervalo = paste(lag(edicion), "hasta", edicion)
   ) |>
   drop_na("hasta_siguiente") |>
-  ggplot(aes(x = hasta_siguiente, y = etiqueta_intervalo, color = cadena)) +
-    geom_segment(aes(x = 0, xend = hasta_siguiente, yend = etiqueta_intervalo), size = 1) +
+  ggplot(aes(y = hasta_siguiente, x = etiqueta_intervalo, color = cadena)) +
+    geom_line(group = 1, size = 1) +
     geom_point(size = 3) +
-    scale_x_continuous(
+    scale_y_continuous(
       labels = \(x) paste(x, "años"),
-      breaks = breaks_width(1)
+      breaks = breaks_width(1),
+      limits = c(0, NA)
     ) +
     theme_minimal() +
     labs(
@@ -181,7 +185,7 @@ df_temporadas |>
       color = NULL,
     ) +
     theme(
-      panel.grid.major.y = element_blank()
+      axis.text.x = element_text(angle = -45, hjust = 0)
     )
 ```
 
@@ -194,10 +198,10 @@ Los 7 millones de espectadores de OT2001 es un hito en la historia de la televis
 ```{r}
 #| warning: false
 df_temporadas |>
-  ggplot(aes(y = edicion, x = audiencia, color = cadena)) +
-    geom_segment(aes(x = 0, xend = audiencia, yend = edicion), size = 1) +
+  ggplot(aes(x = edicion, y = audiencia, color = cadena)) +
+    geom_line(group = 1, size = 1) +
     geom_point(size = 3) +
-    scale_x_continuous(
+    scale_y_continuous(
       labels = label_number(scale = 1e-6, suffix = "M"),
       breaks = breaks_width(1e6)
     ) +
@@ -208,7 +212,7 @@ df_temporadas |>
       color = NULL,
     ) +
     theme(
-      panel.grid.major.y = element_blank()
+      axis.text.x = element_text(angle = -45, hjust = 0)
     )
 ```
 ### Edad media de cada edición
@@ -230,14 +234,14 @@ df_concursantes |>
     cadena = first(cadena),
     edad = mean(edad)
   ) |>
-  ggplot(aes(x = edad, y = edicion, color = cadena)) +
-    geom_segment(aes(x = 0, xend = edad, yend = edicion), size = 1) +
+  ggplot(aes(x = edicion, y = edad, color = cadena)) +
+    geom_line(group = 1, size = 1) +
     geom_point(size = 3) +
-    scale_x_continuous(
+    scale_y_continuous(
       labels = \(x) paste(x, "años"),
       breaks = breaks_width(1)
     ) +
-    coord_cartesian(xlim = c(18, NA)) +
+    coord_cartesian(ylim = c(18, NA)) +
     theme_minimal() +
     labs(
       x = NULL,
@@ -245,7 +249,7 @@ df_concursantes |>
       color = NULL,
     ) +
     theme(
-      panel.grid.major.y = element_blank()
+      axis.text.x = element_text(angle = -45, hjust = 0)
     )
 ```
 ### Distribución de concursantes por CCAA
@@ -255,27 +259,7 @@ En el siguiente gráfico se muestra la proporción (en porcentaje) de todos los 
 Andalucía es, de largo, la Comunidad Autónoma que más concursantes ha aportado al programa. Como detalle, no ha habido ningún concursante de La Rioja en la historia de OT.
 
 ```{r}
-ccaa <- c(
-  "Andalucía",
-  "Aragón",
-  "Asturias",
-  "Canarias",
-  "Cantabria",
-  "Castilla - La Mancha",
-  "Castilla y León",
-  "Cataluña",
-  "Ceuta",
-  "Comunidad Valenciana",
-  "Extremadura",
-  "Galicia",
-  "Islas Baleares",
-  "La Rioja",
-  "Madrid",
-  "Melilla",
-  "Murcia",
-  "Navarra",
-  "País Vasco"
-)
+ccaa <- esp_get_ccaa() |> select(n = ccaa.shortname.es) |> st_drop_geometry() |> pull(n)
 
 df_concursantes |>
   count(comunidad) |>
@@ -315,10 +299,10 @@ df_concursantes |>
     n_comunidades = n_distinct(comunidad),
     cadena = first(cadena)
   ) |>
-  ggplot(aes(x = n_comunidades, y = edicion, color = cadena)) +
-    geom_segment(aes(x = 0, xend = n_comunidades, yend = edicion), size = 1) +
+  ggplot(aes(x = edicion, y = n_comunidades, color = cadena)) +
+    geom_line(group = 1, size = 1) +
     geom_point(size = 3) +
-    scale_x_continuous(
+    scale_y_continuous(
       breaks = breaks_width(1)
     ) +
     theme_minimal() +
@@ -328,7 +312,7 @@ df_concursantes |>
       color = NULL,
     ) +
     theme(
-      panel.grid.major.y = element_blank()
+      axis.text.x = element_text(angle = -45, hjust = 0)
     )
 ```
 
@@ -399,5 +383,221 @@ df_concursantes |>
       panel.grid.major.x = element_blank(),
       legend.position = "bottom",
     )
+```
+### Primer puesto por Comunidad Autónoma
+
+En el siguiente gráfico se muestra el número de concursantes ganadores en cada Comunidad Autónoma.
+
+Destaca especialmente Andalucía con 4 ganadores en la historia del programa.
+
+```{r}
+df_concursantes |>
+  filter(posicion <= 1) |>
+  count(comunidad, name = "ganadores") |>
+  right_join(
+    esp_get_ccaa(),
+    by = c("comunidad" = "ccaa.shortname.es"),
+  ) |>
+  select(
+    comunidad, ganadores, geometry
+  ) |>
+  replace_na(list(ganadores = 0)) |>
+  ggplot(aes(geometry = geometry, fill = factor(ganadores))) +
+    geom_sf() +
+    coord_sf(expand = FALSE) +
+    scale_fill_hue(
+      labels = \(x) ifelse(x == 1, paste(x, "ganador"), paste(x, "ganadores"))
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank()
+    )
+```
+### Distribución de concursantes favoritos
+
+En el siguiente gráfico se muestra el porcentaje de "favorito/a" en las distintas ediciones del programa.
+
+Destaca claramente Rosa López (OT2001) con casi un 70% como favorita. Otro patrón que se infiere es que cuanto más avanzan las ediciones mayor es el número de concursantes favoritos.
+
+```{r}
+#| fig-height: 10 
+#| fig-width: 10
+df_galas |>
+  group_by(edicion) |>
+  mutate(total_galas = max(gala)) |>
+  group_by(edicion, concursante) |>
+  summarise(
+    favs = sum(estado == "FAV"),
+    total_galas = first(total_galas),
+    .groups = "drop"
+  ) |>
+  mutate(porcentaje_fav = favs / total_galas * 100) |>
+  filter(porcentaje_fav > 0) |>
+  ggplot(aes(x = str_trunc(concursante, 20), y = porcentaje_fav, fill = edicion)) +
+    geom_col() +
+    facet_wrap(~ edicion, scales = "free_x") +
+    scale_x_discrete(expand = expansion(c(0, 0.3))) +
+    scale_y_continuous(
+      labels = \(x) paste0(x, "%")
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.x = element_blank(),
+      axis.text.x = element_text(angle = -45, hjust = 0, size = 8),
+      legend.position = "none"
+    )
+```
+### Distribución de concursantes nominados
+
+En el siguiente gráfico se muestra el porcentaje de "nominado/a" en las distintas ediciones del programa.
+
+Destaca claramente Nuria Elosegui (OT2003) con más de un 70% como nominada. El número de concursantes (distintos) nominados por edición es bastante alto. *La suma en cada edición no es el 100% ya que hay varios nominados/as por gala*.
+
+```{r}
+#| fig-height: 10 
+#| fig-width: 10
+df_galas |>
+  group_by(edicion) |>
+  mutate(total_galas = max(gala)) |>
+  group_by(edicion, concursante) |>
+  summarise(
+    noms = sum(estado == "NOM"),
+    total_galas = first(total_galas),
+    .groups = "drop"
+  ) |>
+  mutate(porcentaje_nom = noms / total_galas * 100) |>
+  filter(porcentaje_nom > 0) |>
+  ggplot(aes(x = str_trunc(concursante, 20), y = porcentaje_nom, fill = edicion)) +
+    geom_col() +
+    facet_wrap(~ edicion, scales = "free_x") +
+    scale_x_discrete(expand = expansion(c(0, 0.3))) +
+    scale_y_continuous(
+      labels = \(x) paste0(x, "%")
+    ) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL,
+    ) +
+    theme(
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.x = element_blank(),
+      axis.text.x = element_text(angle = -45, hjust = 0, size = 8),
+      legend.position = "none"
+    )
+```
+
+### Número de nominaciones por concursante ganador
+
+En el siguiente gráfico se muestra el número de nominaciones que recibió el concursante ganador en cada edición del programa.
+
+Hay concursantes con 4 nominaciones que consiguieron ganar el concurso, mientras que otros nunca fueron nominados.
+
+```{r}
+#| message: false
+#| warning: false
+df_galas |>
+  filter(estado == "NOM") |>
+  right_join(df_concursantes) |>
+  filter(posicion == 1) |>
+  group_by(edicion, concursante) |>
+  summarise(
+    num_nominaciones = sum(estado == "NOM")
+  ) |>
+  replace_na(list(num_nominaciones = 0)) |> 
+  ggplot(aes(x = edicion, y = num_nominaciones, label = concursante, color = factor(num_nominaciones))) +
+    geom_point(size = 3) +
+    geom_segment(aes(x = edicion, xend = edicion, y = 0, yend = num_nominaciones), size = 1) +
+    geom_label_repel(size = 3, label.size = .5) +
+    scale_color_discrete(
+      labels = \(x) ifelse(x == 1, "1 nominación", paste(x, "nominaciones"))
+    ) +
+    labs(
+      x = NULL,
+      y = NULL,
+      color = NULL
+    ) +
+    theme_minimal() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      legend.position = "bottom"
+    )
+```
+### Perfil del concursante nominado
+
+En el siguiente gráfico se muestra la distribución de edad y género de aquellos concursantes con menor y mayor número de nominaciones en cada edición.
+
+- Aquellos concursantes con el mínimo número de nominaciones por edición son, en su mayoría, hombres de alrededor de 24 años o bien mujeres de alrededor de 19 años o ya de 26 años.
+- Aquellos concursantes con el máximo número de nominaciones por edición son, en su mayoría, también hombres de alrededor de 23-24 años o bien mujeres de 19 años o ya de 25 años.
+
+```{r}
+#| message: false
+#| warning: false
+df_galas |>
+  filter(estado == "NOM") |>
+  right_join(df_concursantes) |>
+  group_by(edicion, concursante) |>
+  summarise(
+    num_nominaciones = sum(estado == "NOM")
+  ) |>
+  replace_na(list(num_nominaciones = 0)) |>
+  group_by(edicion) |>
+  mutate(
+    estado_nom = factor(case_when(
+      num_nominaciones == min(num_nominaciones) ~ "MIN",
+      num_nominaciones == max(num_nominaciones) ~ "MAX",
+      TRUE ~ NA
+    ), levels = c("MIN", "MAX"))
+  ) |>
+  filter(!is.na(estado_nom)) |>
+  ungroup() |>
+  left_join(df_concursantes) |>
+  ggplot(aes(x = estado_nom, y = edad, fill = genero)) +
+    stat_halfeye(
+      data = \(d) d |> filter(genero == "H"),
+      side = "left",
+      show_interval = FALSE,
+      show_point = FALSE,
+      adjust = 0.7,
+      width = 0.5
+    ) +
+    stat_halfeye(
+      data = \(d) d |> filter(genero == "M"),
+      side = "right",
+      show_interval = FALSE,
+      show_point = FALSE,
+      adjust = 0.7,
+      width = 0.5
+    ) +
+    scale_fill_discrete(
+      labels = c(H = "Hombre", M = "Mujer")
+    ) +
+    scale_x_discrete(
+      labels = c(MIN = "Mínimo número de nominaciones", MAX = "Máximo número de nominaciones")
+    ) +
+    scale_y_continuous(
+      minor_breaks = breaks_width(1),
+      labels = \(x) paste(x, "años")
+    ) +
+    labs(
+      x = NULL,
+      y = NULL,
+      fill = NULL
+    ) +
+    theme_minimal()
 ```
 
