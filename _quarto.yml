@@ -5,11 +5,19 @@ lang: es
 
 book:
   title: "Operación Triunfo"
-  author: "Sergio Delgado Quintero"
+  author:
+    name: "Sergio Delgado Quintero"
+    url: https://sdelquin.matraka.es
   chapters:
     - index.qmd
     - scrap.qmd
     - eda.qmd
+  navbar:
+    right:
+      - icon: github
+        href: https://github.com/sdelquin/ot
+      - icon: globe
+        href: https://sdelquin.matraka.es
 
 format:
   html:
